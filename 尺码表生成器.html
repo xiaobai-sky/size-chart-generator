@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>尺码表生成器</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #F5F3EE;
+    --surface: #FFFFFF;
+    --surface2: #F1EFE8;
+    --border: #D3D1C7;
+    --border-strong: #B4B2A9;
+    --text: #2C2C2A;
+    --text-2: #5F5E5A;
+    --text-3: #888780;
+    --accent: #444441;
+    --accent-text: #F1EFE8;
+    --blue-light: #E6F1FB;
+    --blue-mid: #185FA5;
+    --danger: #A32D2D;
+    --danger-light: #FCEBEB;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  header {
+    background: var(--accent);
+    color: var(--accent-text);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 { font-size: 16px; font-weight: 500; letter-spacing: 0.05em; }
+  header span { font-size: 12px; opacity: 0.55; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 0;
+    min-height: calc(100vh - 52px);
+  }
+
+  .panel-left {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .panel-right {
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--text-2); }
+  .field input[type="text"] {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 11px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  .field input[type="text"]:focus { border-color: var(--accent); background: #fff; }
+
+  .cols-editor { display: flex; flex-direction: column; gap: 6px; }
+  .col-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .col-row input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+  }
+  .col-row input:focus { border-color: var(--accent); background: #fff; }
+  .col-row.first-col input { background: var(--surface2); color: var(--text-2); cursor: not-allowed; }
+
+  .btn-icon {
+    width: 28px; height: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    color: var(--text-2);
+    transition: all 0.12s;
+    flex-shrink: 0;
+  }
+  .btn-icon:hover { background: var(--surface2); border-color: var(--border-strong); }
+  .btn-icon.danger:hover { background: var(--danger-light); border-color: var(--danger); color: var(--danger); }
+
+  .rows-editor { display: flex; flex-direction: column; gap: 4px; }
+  .size-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .size-row:nth-child(even) { background: var(--surface2); }
+  .size-row input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text);
+    outline: none;
+    padding: 2px 4px;
+    text-align: center;
+  }
+  .size-row input:first-child { font-weight: 500; text-align: left; }
+  .size-row input:focus { background: #fff; border-radius: 3px; }
+
+  .btn-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-3);
+    font-family: inherit;
+    transition: all 0.12s;
+    width: 100%;
+  }
+  .btn-add:hover { border-color: var(--accent); color: var(--accent); background: var(--surface2); }
+
+  .field-note {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .field-note label { font-size: 12px; color: var(--text-2); }
+  .field-note textarea {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 11px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--bg);
+    outline: none;
+    resize: vertical;
+    min-height: 60px;
+    line-height: 1.6;
+    transition: border-color 0.15s;
+  }
+  .field-note textarea:focus { border-color: var(--accent); background: #fff; }
+
+  .preview-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .btn-download {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.03em;
+  }
+  .btn-download:hover { opacity: 0.88; }
+  .btn-download:active { transform: scale(0.97); }
+  .btn-download svg { flex-shrink: 0; }
+
+  .preview-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    display: inline-block;
+    min-width: 100%;
+  }
+
+  #preview-product-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: #2C2C2A;
+    margin-bottom: 12px;
+    letter-spacing: 0.02em;
+  }
+
+  .sc-table-outer {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid #D3D1C7;
+    display: inline-block;
+    min-width: 100%;
+  }
+
+  table#preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    white-space: nowrap;
+  }
+  table#preview-table th {
+    padding: 11px 18px;
+    background: #444441;
+    color: #F1EFE8;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-align: center;
+    border-right: 1px solid #5F5E5A;
+  }
+  table#preview-table th:first-child { text-align: left; min-width: 80px; }
+  table#preview-table th:last-child { border-right: none; }
+  table#preview-table td {
+    padding: 9px 18px;
+    text-align: center;
+    color: #2C2C2A;
+    border-right: 1px solid #D3D1C7;
+    border-top: 1px solid #D3D1C7;
+    transition: background 0.1s;
+  }
+  table#preview-table td:first-child { font-weight: 500; text-align: left; }
+  table#preview-table td:last-child { border-right: none; }
+  table#preview-table tr:nth-child(odd) td { background: #FFFFFF; }
+  table#preview-table tr:nth-child(even) td { background: #F1EFE8; }
+  table#preview-table tr:hover td { background: #E6F1FB; color: #185FA5; }
+
+  #preview-note {
+    font-size: 12px;
+    color: #888780;
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-left: 2px solid #D3D1C7;
+    background: #F1EFE8;
+    border-radius: 0 6px 6px 0;
+    display: none;
+  }
+
+  .hint {
+    font-size: 11.5px;
+    color: var(--text-3);
+    line-height: 1.7;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 720px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+    .panel-left {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-right {
+      padding: 20px;
+    }
+    header {
+      padding: 14px 20px;
+    }
+  }
+
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #2C2C2A;
+    color: #F1EFE8;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    pointer-events: none;
+    z-index: 999;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>尺码表生成器</h1>
+  <span>填写数据 → 实时预览 → 一键下载图片</span>
+</header>
+
+<div class="layout">
+
+  <div class="panel-left">
+
+    <div>
+      <div class="section-label">基本信息</div>
+      <div class="field">
+        <label>产品名称</label>
+        <input type="text" id="product-name" placeholder="例：男款宽松卫衣" oninput="updatePreview();saveToStorage()">
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div>
+      <div class="section-label">列标题设置</div>
+      <div class="cols-editor" id="cols-editor">
+        <div class="col-row first-col">
+          <input type="text" value="尺码" disabled>
+          <div class="btn-icon" style="visibility:hidden">＋</div>
+        </div>
+      </div>
+      <button class="btn-add" style="margin-top:6px" onclick="addCol()">＋ 添加列</button>
+      <p class="hint" style="margin-top:8px">「尺码」列固定为第一列，其余列可自由增减</p>
+    </div>
+
+    <hr class="divider">
+
+    <div>
+      <div class="section-label">尺码数据</div>
+      <div class="rows-editor" id="rows-editor"></div>
+      <button class="btn-add" style="margin-top:6px" onclick="addRow()">＋ 添加尺码行</button>
+      <p class="hint" style="margin-top:8px">每行第一格填尺码名称，其余格填对应数值</p>
+    </div>
+
+    <hr class="divider">
+
+    <div class="field-note">
+      <div class="section-label">备注</div>
+      <textarea id="note-input" placeholder="例：数据为参考值，实际以量身为准（留空则不显示）" oninput="updatePreview()"></textarea>
+    </div>
+
+  </div>
+
+  <div class="panel-right">
+
+    <div class="preview-label">
+      <span>实时预览</span>
+      <button class="btn-download" onclick="downloadImage()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        下载图片
+      </button>
+    </div>
+
+    <div class="preview-wrap" id="capture-area">
+      <div id="preview-product-name"></div>
+      <div class="sc-table-outer">
+        <table id="preview-table">
+          <thead><tr id="preview-thead"></tr></thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
+      <div id="preview-note"></div>
+    </div>
+
+    <p class="hint">下载的图片仅包含表格本身，不含左侧编辑面板。图片格式为 PNG，可直接用于发布或打印。</p>
+
+  </div>
+</div>
+
+<div id="toast">✓ 图片已下载</div>
+
+<script>
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function sanitizeFilename(name) {
+  return name.replace(/[/\\:*?"<>|]/g, '_').trim() || '尺码表';
+}
+
+const STORAGE_KEY = 'size_table_v1';
+
+function saveToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      cols,
+      rows,
+      name: document.getElementById('product-name').value,
+      note: document.getElementById('note-input').value,
+    }));
+  } catch (e) {}
+}
+
+function loadFromStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (!saved) return false;
+    cols = saved.cols || cols;
+    rows = saved.rows || rows;
+    document.getElementById('product-name').value = saved.name || '';
+    document.getElementById('note-input').value = saved.note || '';
+    return true;
+  } catch (e) { return false; }
+}
+
+let cols = ['胸围(cm)', '肩宽(cm)', '衣长(cm)'];
+let rows = [
+  ['L',   '95–99',  '41.5', '67'],
+  ['XL',  '100–104','43',   '69'],
+  ['2XL', '105–110','44.5', '71'],
+  ['3XL', '111–117','46',   '73'],
+];
+
+function renderColsEditor() {
+  const el = document.getElementById('cols-editor');
+  const fixed = el.querySelector('.first-col');
+  el.innerHTML = '';
+  el.appendChild(fixed);
+  cols.forEach((c, i) => {
+    const row = document.createElement('div');
+    row.className = 'col-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = c;
+    input.placeholder = '列名';
+    input.addEventListener('input', () => { cols[i] = input.value; updatePreview(); saveToStorage(); });
+    const btn = document.createElement('button');
+    btn.className = 'btn-icon danger';
+    btn.title = '删除此列';
+    btn.textContent = '×';
+    btn.addEventListener('click', () => removeCol(i));
+    row.appendChild(input);
+    row.appendChild(btn);
+    el.appendChild(row);
+  });
+}
+
+function addCol() {
+  cols.push('新列');
+  rows.forEach(r => r.push(''));
+  renderColsEditor();
+  renderRowsEditor();
+  updatePreview();
+  saveToStorage();
+  const inputs = document.querySelectorAll('#cols-editor .col-row:not(.first-col) input');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+function removeCol(i) {
+  if (cols.length <= 1) return;
+  cols.splice(i, 1);
+  rows.forEach(r => r.splice(i + 1, 1));
+  renderColsEditor();
+  renderRowsEditor();
+  updatePreview();
+  saveToStorage();
+}
+
+function renderRowsEditor() {
+  const el = document.getElementById('rows-editor');
+  el.innerHTML = '';
+  rows.forEach((row, ri) => {
+    const div = document.createElement('div');
+    div.className = 'size-row';
+    const totalCols = cols.length + 1;
+    while (rows[ri].length < totalCols) rows[ri].push('');
+    rows[ri].slice(0, totalCols).forEach((val, ci) => {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = val;
+      input.placeholder = ci === 0 ? '尺码名' : '数值';
+      input.addEventListener('input', () => { rows[ri][ci] = input.value; updatePreview(); saveToStorage(); });
+      div.appendChild(input);
+    });
+    const btn = document.createElement('button');
+    btn.className = 'btn-icon danger';
+    btn.title = '删除此行';
+    btn.textContent = '×';
+    btn.addEventListener('click', () => removeRow(ri));
+    div.appendChild(btn);
+    el.appendChild(div);
+  });
+}
+
+function addRow() {
+  const newRow = [''].concat(cols.map(() => ''));
+  rows.push(newRow);
+  renderRowsEditor();
+  updatePreview();
+  saveToStorage();
+  const allRows = document.querySelectorAll('#rows-editor .size-row');
+  if (allRows.length) allRows[allRows.length - 1].querySelector('input').focus();
+}
+
+function removeRow(i) {
+  rows.splice(i, 1);
+  renderRowsEditor();
+  updatePreview();
+  saveToStorage();
+}
+
+function updatePreview() {
+  const name = document.getElementById('product-name').value.trim();
+  const nameEl = document.getElementById('preview-product-name');
+  nameEl.textContent = name;
+  nameEl.style.display = name ? 'block' : 'none';
+  nameEl.style.marginBottom = name ? '12px' : '0';
+
+  const thead = document.getElementById('preview-thead');
+  const allCols = ['尺码', ...cols];
+  thead.innerHTML = allCols.map(c => `<th>${esc(c)}</th>`).join('');
+
+  const tbody = document.getElementById('preview-tbody');
+  tbody.innerHTML = rows.map(row => {
+    const cells = allCols.map((_, ci) => {
+      const val = row[ci] !== undefined ? row[ci] : '';
+      return `<td>${esc(val) || '—'}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  const note = document.getElementById('note-input').value.trim();
+  const noteEl = document.getElementById('preview-note');
+  if (note) {
+    noteEl.textContent = note;
+    noteEl.style.display = 'block';
+  } else {
+    noteEl.style.display = 'none';
+  }
+
+  saveToStorage();
+}
+
+function downloadImage() {
+  const area = document.getElementById('capture-area');
+  const btn = document.querySelector('.btn-download');
+  const origText = btn.innerHTML;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-dasharray="20" stroke-dashoffset="20"><animate attributeName="stroke-dashoffset" from="20" to="0" dur="0.8s" repeatCount="indefinite"/></circle></svg> 生成中…';
+  btn.disabled = true;
+
+  const rawName = document.getElementById('product-name').value.trim();
+  const filename = sanitizeFilename(rawName);
+
+  const tableOuter = area.querySelector('.sc-table-outer');
+  const origRadius = tableOuter.style.borderRadius;
+  tableOuter.style.borderRadius = '0';
+
+  html2canvas(area, {
+    backgroundColor: '#ffffff',
+    scale: 3,
+    useCORS: true,
+    logging: false,
+  }).then(canvas => {
+    tableOuter.style.borderRadius = origRadius;
+
+    const link = document.createElement('a');
+    link.download = `${filename}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+
+    btn.innerHTML = origText;
+    btn.disabled = false;
+
+    const toast = document.getElementById('toast');
+    toast.textContent = `✓ 已下载：${filename}.png`;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  });
+}
+
+const storedOk = loadFromStorage();
+if (!storedOk) {
+  cols = ['胸围(cm)', '肩宽(cm)', '衣长(cm)'];
+  rows = [
+    ['L',   '95–99',  '41.5', '67'],
+    ['XL',  '100–104','43',   '69'],
+    ['2XL', '105–110','44.5', '71'],
+    ['3XL', '111–117','46',   '73'],
+  ];
+}
+renderColsEditor();
+renderRowsEditor();
+updatePreview();
+</script>
+</body>
+</html>
